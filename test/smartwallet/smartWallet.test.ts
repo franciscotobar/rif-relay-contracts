@@ -400,7 +400,7 @@ describe('SmartWallet contract', function () {
       ];
 
       const mockSmartWalletFactory = await smock.mock<SmartWallet__factory>(
-        'CustomSmartWallet'
+        'SmartWallet'
       );
 
       provider = hardhat.provider;

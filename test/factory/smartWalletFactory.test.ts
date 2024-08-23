@@ -503,5 +503,7 @@ describe('SmartWalletFactory', function () {
         expect(finalWorkerBalance).to.be.equal(initialWorkerBalance);
       });
     });
+
+    describe('serverUserSmartWalletCreation', function () {});
   });
 });

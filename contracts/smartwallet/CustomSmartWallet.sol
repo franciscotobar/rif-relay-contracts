@@ -160,14 +160,7 @@ contract CustomSmartWallet is IForwarder {
         address feesReceiver,
         bytes calldata sig
     ) external payable override returns (bool success, bytes memory ret) {
-        (sig);
-        require(msg.sender == req.relayHub, "Invalid caller");
-
-        _verifySig(suffixData, req, sig);
-        require(
-            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
-            "SW: request expired"
-        );
+        _validateRequest(suffixData, req, sig);
         nonce++;
 
         if (req.tokenAmount > 0) {
@@ -222,6 +215,17 @@ contract CustomSmartWallet is IForwarder {
         }
     }
 
+    function serverExecute(
+        bytes32 suffixData,
+        ForwardRequest memory req,
+        address /* feesReceiver */,
+        bytes calldata sig
+    ) external payable override returns (bool, bool) {
+        _validateRequest(suffixData, req, sig);
+
+        return (false, false);
+    }
+
     function _getChainID() private pure returns (uint256 id) {
         assembly {
             id := chainid()
@@ -231,7 +235,7 @@ contract CustomSmartWallet is IForwarder {
     function _verifySig(
         bytes32 suffixData,
         ForwardRequest memory req,
-        bytes memory sig
+        bytes calldata sig
     ) private view {
         //Verify Owner
         require(
@@ -254,6 +258,21 @@ contract CustomSmartWallet is IForwarder {
                 req.from
             ),
             "Signature mismatch"
+        );
+    }
+
+    function _validateRequest(
+        bytes32 suffixData,
+        ForwardRequest memory req,
+        bytes calldata sig
+    ) internal view {
+        (sig);
+        require(msg.sender == req.relayHub, "Invalid caller");
+
+        _verifySig(suffixData, req, sig);
+        require(
+            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
+            "SW: request expired"
         );
     }
 

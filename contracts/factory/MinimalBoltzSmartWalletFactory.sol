@@ -22,6 +22,15 @@ contract MinimalBoltzSmartWalletFactory is
         address forwarderTemplate
     ) public BaseSmartWalletFactory(forwarderTemplate) {}
 
+    function serverUserSmartWalletCreation(
+        IForwarder.DeployRequest memory req,
+        bytes32 suffixData,
+        address feesReceiver,
+        bytes calldata sig
+    ) external view override returns (bool, bool) {
+        super._validateRequest(req, suffixData, sig);
+    }
+
     function relayedUserSmartWalletCreation(
         IForwarder.DeployRequest memory req,
         bytes32 suffixData,

@@ -28,15 +28,7 @@ contract NativeHolderSmartWallet is SmartWallet {
         address feesReceiver,
         bytes calldata sig
     ) external payable override returns (bool success, bytes memory ret) {
-        (sig);
-        require(msg.sender == req.relayHub, "Invalid caller");
-
-        _verifySig(suffixData, req, sig);
-        // solhint-disable-next-line not-rely-on-time
-        require(
-            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
-            "SW: request expired"
-        );
+        super._validateRequest(suffixData, req, sig);
         nonce++;
 
         if (req.tokenAmount > 0) {

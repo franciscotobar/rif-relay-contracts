@@ -175,6 +175,22 @@ contract CustomSmartWalletFactory is
         );
     }
 
+    function serverUserSmartWalletCreation(
+        IForwarder.DeployRequest memory req,
+        bytes32 suffixData,
+        address feesReceiver,
+        bytes calldata sig
+    ) external view override returns (bool, bool) {
+        (sig);
+        require(msg.sender == req.relayHub, "Invalid caller");
+        _verifySig(req, suffixData, sig);
+        // solhint-disable-next-line not-rely-on-time
+        require(
+            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
+            "SW: request expired"
+        );
+    }
+
     function relayedUserSmartWalletCreation(
         IForwarder.DeployRequest memory req,
         bytes32 suffixData,

@@ -20,14 +20,7 @@ contract BoltzSmartWallet is BaseSmartWallet {
         override
         returns (bool success, bytes memory ret)
     {
-        (sig);
-        require(msg.sender == req.relayHub, "Invalid caller");
-
-        _verifySig(suffixData, req, sig);
-        require(
-            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
-            "SW: request expired"
-        );
+        super._validateRequest(suffixData, req, sig);
         nonce++;
 
         (success, ret) = req.to.call{gas: req.gas, value: req.value}(req.data);
@@ -63,6 +56,17 @@ contract BoltzSmartWallet is BaseSmartWallet {
             //can't fail: req.from signed (off-chain) the request, so it must be an EOA...
             payable(req.from).transfer(address(this).balance);
         }
+    }
+
+    function serverExecute(
+        bytes32 suffixData,
+        ForwardRequest memory req,
+        address feesReceiver,
+        bytes calldata sig
+    ) external payable virtual override returns (bool, bool) {
+        super._validateRequest(suffixData, req, sig);
+
+        return (false, false);
     }
 
     /**
