@@ -138,14 +138,16 @@ contract RelayHub is IRelayHub {
         );
     }
 
-    function deployCall(
-        EnvelopingTypes.DeployRequest calldata deployRequest,
+    function _validateWorker(
+        EnvelopingTypes.RelayData calldata requestRelayData,
         bytes calldata signature
-    ) external override {
+    ) internal view returns (address) {
         (signature);
 
-        bytes32 managerEntry = workerToManager[msg.sender];
+        require(msg.sender == tx.origin, "RelayWorker cannot be a contract");
+        require(requestRelayData.gasPrice <= tx.gasprice, "Invalid gas price");
 
+        bytes32 managerEntry = workerToManager[msg.sender];
         //read last nibble which stores the isWorkerEnabled flag, it must be 1 (true)
         require(
             managerEntry &
@@ -156,13 +158,16 @@ contract RelayHub is IRelayHub {
 
         address manager = address(uint160(uint256(managerEntry >> 4)));
 
-        require(msg.sender == tx.origin, "RelayWorker cannot be a contract");
         _requireManagerStaked(manager);
 
-        require(
-            deployRequest.relayData.gasPrice <= tx.gasprice,
-            "Invalid gas price"
-        );
+        return manager;
+    }
+
+    function deployCall(
+        EnvelopingTypes.DeployRequest calldata deployRequest,
+        bytes calldata signature
+    ) external override {
+        _validateWorker(deployRequest.relayData, signature);
 
         (bool deploySuccess, bytes memory ret) = Eip712Library.deploy(
             deployRequest,
@@ -176,30 +181,25 @@ contract RelayHub is IRelayHub {
         }
     }
 
+    function serverDeployCall(
+        EnvelopingTypes.DeployRequest calldata deployRequest,
+        bytes calldata signature
+    ) external returns (bool, bool) {
+        _validateWorker(deployRequest.relayData, signature);
+
+        (bool execution, bool nativePayment) = Eip712Library.serverDeploy(
+            deployRequest,
+            signature
+        );
+
+        return (execution, nativePayment);
+    }
+
     function relayCall(
         EnvelopingTypes.RelayRequest calldata relayRequest,
         bytes calldata signature
     ) external override returns (bool destinationCallSuccess) {
-        (signature);
-
-        require(msg.sender == tx.origin, "RelayWorker cannot be a contract");
-        require(
-            relayRequest.relayData.gasPrice <= tx.gasprice,
-            "Invalid gas price"
-        );
-
-        bytes32 managerEntry = workerToManager[msg.sender];
-        //read last nibble which stores the isWorkerEnabled flag, it must be 1 (true)
-        require(
-            managerEntry &
-                0x0000000000000000000000000000000000000000000000000000000000000001 ==
-                0x0000000000000000000000000000000000000000000000000000000000000001,
-            "Not an enabled worker"
-        );
-
-        address manager = address(uint160(uint256(managerEntry >> 4)));
-
-        _requireManagerStaked(manager);
+        address manager = _validateWorker(relayRequest.relayData, signature);
 
         bool forwarderSuccess;
         bytes memory relayedCallReturnValue;
@@ -234,6 +234,20 @@ contract RelayHub is IRelayHub {
                 relayedCallReturnValue
             );
         }
+    }
+
+    function serverRelayCall(
+        EnvelopingTypes.RelayRequest calldata relayRequest,
+        bytes calldata signature
+    ) external returns (bool, bool) {
+        _validateWorker(relayRequest.relayData, signature);
+
+        (bool execution, bool payment) = Eip712Library.serverExecute(
+            relayRequest,
+            signature
+        );
+
+        return (execution, payment);
     }
 
     modifier penalizerOnly() {

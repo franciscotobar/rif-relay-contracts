@@ -20,14 +20,7 @@ contract SmartWallet is BaseSmartWallet {
         override
         returns (bool success, bytes memory ret)
     {
-        (sig);
-        require(msg.sender == req.relayHub, "Invalid caller");
-
-        _verifySig(suffixData, req, sig);
-        require(
-            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
-            "SW: request expired"
-        );
+        super._validateRequest(suffixData, req, sig);
         nonce++;
 
         if (req.tokenAmount > 0) {
@@ -56,7 +49,7 @@ contract SmartWallet is BaseSmartWallet {
         //methods that revert if the gasleft() is not enough to execute whatever logic they have.
 
         require(gasleft() > req.gas, "Not enough gas left");
-        (success, ret) = req.to.call{gas: req.gas, value: req.value}(req.data);
+        //(success, ret) = req.to.call{gas: req.gas, value: req.value}(req.data);
 
         //If any balance has been added then trasfer it to the owner EOA
         if (address(this).balance > 0) {

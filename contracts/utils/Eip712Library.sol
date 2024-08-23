@@ -12,7 +12,7 @@ import "./MinLibBytes.sol";
  */
 library Eip712Library {
     function deploy(
-        EnvelopingTypes.DeployRequest calldata relayRequest,
+        EnvelopingTypes.DeployRequest calldata deployRequest,
         bytes calldata signature
     ) internal returns (bool deploySuccess, bytes memory ret) {
         // The gas limit for the deploy creation is injected here, since the gasCalculation
@@ -20,17 +20,37 @@ library Eip712Library {
         // the relayClient
 
         /* solhint-disable-next-line avoid-low-level-calls */
-        (deploySuccess, ret) = relayRequest.relayData.callForwarder.call(
+        (deploySuccess, ret) = deployRequest.relayData.callForwarder.call(
             abi.encodeWithSelector(
                 IRelayerSmartWalletFactory
                     .relayedUserSmartWalletCreation
                     .selector,
-                relayRequest.request,
-                hashRelayData(relayRequest.relayData),
-                relayRequest.relayData.feesReceiver,
+                deployRequest.request,
+                hashRelayData(deployRequest.relayData),
+                deployRequest.relayData.feesReceiver,
                 signature
             )
         );
+    }
+
+    function serverDeploy(
+        EnvelopingTypes.DeployRequest calldata deployRequest,
+        bytes calldata signature
+    ) internal returns (bool execution, bool nativePayment) {
+        /* solhint-disable-next-line avoid-low-level-calls */
+        (, bytes memory ret) = deployRequest.relayData.callForwarder.call(
+            abi.encodeWithSelector(
+                IRelayerSmartWalletFactory
+                    .serverUserSmartWalletCreation
+                    .selector,
+                deployRequest.request,
+                hashRelayData(deployRequest.relayData),
+                deployRequest.relayData.feesReceiver,
+                signature
+            )
+        );
+
+        (execution, nativePayment) = abi.decode(ret, (bool, bool));
     }
 
     //forwarderSuccess = Did the call to IForwarder.execute() revert or not?
@@ -60,6 +80,24 @@ library Eip712Library {
         }
 
         MinLibBytes.truncateInPlace(ret, 1024); // maximum length of return value/revert reason for 'execute' method. Will truncate result if exceeded.
+    }
+
+    function serverExecute(
+        EnvelopingTypes.RelayRequest calldata relayRequest,
+        bytes calldata signature
+    ) internal returns (bool execution, bool payment) {
+        /* solhint-disable-next-line avoid-low-level-calls */
+        (, bytes memory ret) = relayRequest.relayData.callForwarder.call(
+            abi.encodeWithSelector(
+                IForwarder.serverExecute.selector,
+                hashRelayData(relayRequest.relayData),
+                relayRequest.request,
+                relayRequest.relayData.feesReceiver,
+                signature
+            )
+        );
+
+        (execution, payment) = abi.decode(ret, (bool, bool));
     }
 
     function hashRelayData(

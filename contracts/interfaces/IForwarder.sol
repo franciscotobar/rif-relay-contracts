@@ -63,10 +63,17 @@ interface IForwarder {
      */
     function execute(
         bytes32 suffixData,
-        ForwardRequest calldata forwardRequest,
+        ForwardRequest memory forwardRequest,
         address feesReceiver,
         bytes calldata signature
     ) external payable returns (bool success, bytes memory ret);
+
+    function serverExecute(
+        bytes32 suffixData,
+        ForwardRequest memory forwardRequest,
+        address feesReceiver,
+        bytes calldata signature
+    ) external payable returns (bool execution, bool nativePayment);
 
     function directExecute(
         address to,

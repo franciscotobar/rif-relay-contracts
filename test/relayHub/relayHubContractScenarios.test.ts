@@ -10,6 +10,8 @@ import {
   SmartWallet,
   SmartWalletFactory,
   ERC20,
+  SmartWalletFactory__factory,
+  SmartWallet__factory,
 } from '../../typechain-types';
 import { createContractDeployer } from './utils';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
@@ -25,11 +27,18 @@ import {
 } from '../utils/EIP712Utils';
 import { IForwarder } from 'typechain-types/contracts/RelayHub';
 import { Wallet } from 'ethers';
+import { deployContract } from '../../utils/deployment/deployment.utils';
+import { HARDHAT_CHAIN_ID } from '../smartwallet/utils';
+import { createValidPersonalSignSignature } from '../utils/createValidPersonalSignSignature';
 
 chai.use(smock.matchers);
 chai.use(chaiAsPromised);
 
 const ZERO_ADDRESS = ethers.constants.AddressZero;
+
+type SmartWalletFactoryOptions = Parameters<
+  SmartWalletFactory__factory['deploy']
+>;
 
 describe('RelayHub contract - Manager related scenarios', function () {
   let deployRelayHubContract: ReturnType<typeof createContractDeployer>;
@@ -319,7 +328,7 @@ describe('RelayHub contract - Manager related scenarios', function () {
     const nextWalletIndex = 500;
 
     function createRequest(
-      request: Partial<IForwarder.DeployRequestStruct> & { gas: string },
+      request: Partial<IForwarder.DeployRequestStruct>,
       relayData: Partial<RelayData>
     ): DeployRequest {
       const baseRequest: DeployRequest = {
@@ -373,7 +382,7 @@ describe('RelayHub contract - Manager related scenarios', function () {
       mockRelayHub = undefined as unknown as MockContract<RelayHub>;
     });
 
-    it('Should failed a deployRequest if SmartWallet has already been initialized', async function () {
+    it('Should fail a deployRequest if SmartWallet has already been initialized', async function () {
       await mockRelayHub.stakeForAddress(relayManagerAddr, 1000, {
         value: ethers.BigNumber.from(2),
         from: relayOwnerAddr,
@@ -399,7 +408,6 @@ describe('RelayHub contract - Manager related scenarios', function () {
           tokenGas: '50000',
           recoverer: ZERO_ADDRESS,
           index: '0',
-          gas: '90000000000000',
         },
         {
           feesReceiver: relayWorkerAddr,
@@ -435,7 +443,7 @@ describe('RelayHub contract - Manager related scenarios', function () {
       );
     });
 
-    it('Should faild a deployRequest if Manager is unstaked', async function () {
+    it('Should fail a deployRequest if Manager is unstaked', async function () {
       await mockRelayHub.stakeForAddress(relayManagerAddr, 1000, {
         value: oneRBTC,
         from: relayOwnerAddr,
@@ -522,7 +530,6 @@ describe('RelayHub contract - Manager related scenarios', function () {
           tokenGas: '50000',
           recoverer: ZERO_ADDRESS,
           index: '0',
-          gas: '900000000000',
         },
         {
           feesReceiver: relayWorkerAddr,
@@ -580,6 +587,306 @@ describe('RelayHub contract - Manager related scenarios', function () {
         'no relay workers',
         'Relay Server was successfully registered'
       );
+    });
+  });
+});
+
+describe.only('RelayHub', function () {
+  const url = 'http://relay.com';
+  const environment = 33; // RSK = 33 | HARDHAT = HARDHAT_CHAIN_ID
+  let penalizer: Penalizer;
+  let relayHub: RelayHub;
+  let relayManager: SignerWithAddress;
+  let relayWorker: Wallet;
+  let relayOwner: SignerWithAddress;
+  let smartWalletFactory: SmartWalletFactory;
+
+  beforeEach(async function () {
+    [relayOwner, relayManager] = (await ethers.getSigners()) as [
+      SignerWithAddress,
+      SignerWithAddress
+    ];
+    relayWorker = Wallet.createRandom().connect(ethers.provider);
+    relayOwner.sendTransaction({
+      to: relayWorker.address,
+      value: ethers.utils.parseEther('1'),
+    });
+    ({ contract: penalizer } = await deployContract<Penalizer, []>({
+      contractName: 'Penalizer',
+      constructorArgs: [],
+    }));
+    const relayHubFactory = await ethers.getContractFactory('RelayHub');
+    relayHub = await relayHubFactory.deploy(penalizer.address, 1, 1, 10, 1);
+    await relayHub.stakeForAddress(relayManager.address, 1000, {
+      value: ethers.BigNumber.from(2),
+      from: relayOwner.address,
+    });
+
+    await relayHub.connect(relayManager).addRelayWorkers([relayWorker.address]);
+    await relayHub.connect(relayManager).registerRelayServer(url);
+
+    const { contract: template } = await deployContract<SmartWallet, []>({
+      contractName: 'SmartWallet',
+      constructorArgs: [],
+    });
+    console.log('-------------template');
+    console.log(template.address);
+    console.log('-------------template');
+    ({ contract: smartWalletFactory } = await deployContract<
+      SmartWalletFactory,
+      SmartWalletFactoryOptions
+    >({
+      contractName: 'SmartWalletFactory',
+      constructorArgs: [template.address],
+    }));
+    console.log('-------------factory');
+    console.log(smartWalletFactory.address);
+    console.log('-------------factory');
+    console.log('-------------relayHub');
+    console.log(relayHub.address);
+    console.log('-------------relayHub');
+  });
+
+  describe('serverDeployCall', function () {
+    function createRequest(
+      request: Partial<IForwarder.DeployRequestStruct>,
+      relayData: Partial<RelayData>
+    ): DeployRequest {
+      const baseRequest: DeployRequest = {
+        request: {
+          relayHub: ZERO_ADDRESS,
+          from: ZERO_ADDRESS,
+          to: ZERO_ADDRESS,
+          tokenContract: ZERO_ADDRESS,
+          value: '0',
+          nonce: '0',
+          tokenAmount: '0',
+          tokenGas: '0',
+          data: '0x',
+          recoverer: ZERO_ADDRESS,
+          validUntilTime: '0',
+          index: 0,
+        },
+        relayData: {
+          gasPrice: '1',
+          feesReceiver: ZERO_ADDRESS,
+          callForwarder: ZERO_ADDRESS,
+          callVerifier: ZERO_ADDRESS,
+        },
+      };
+
+      return {
+        request: {
+          ...baseRequest.request,
+          ...request,
+        },
+        relayData: {
+          ...baseRequest.relayData,
+          ...relayData,
+        },
+      };
+    }
+
+    it('', async function () {
+      const deployRequest = createRequest(
+        {
+          from: relayWorker.address,
+          relayHub: relayHub.address,
+          recoverer: ZERO_ADDRESS,
+          index: '0',
+        },
+        {
+          callForwarder: smartWalletFactory.address,
+        }
+      );
+
+      const typedRequestData = new TypedDeployRequestData(
+        environment,
+        smartWalletFactory.address,
+        deployRequest
+      );
+
+      const privateKey = Buffer.from(
+        relayWorker.privateKey.substring(2, 66),
+        'hex'
+      );
+
+      const signature = getLocalEip712DeploySignature(
+        typedRequestData,
+        privateKey
+      );
+
+      //const tx1 = await mockRelayHub.connect(relayWorker).serverDeployCall(deployRequest, signature, { gasPrice: 1 });
+      const estimation = await relayHub
+        .connect(relayWorker)
+        .estimateGas.serverDeployCall(deployRequest, signature, {
+          gasPrice: 1,
+        });
+      const tx2 = await relayHub
+        .connect(relayWorker)
+        .deployCall(deployRequest, signature, { gasPrice: 1 });
+
+      //const receipt1 = await tx1.wait();
+      const receipt2 = await tx2.wait();
+
+      // console.log(tx1);
+
+      console.log(
+        estimation
+          .add(20300) //nonce increase
+          .add(41000) // create2
+          .add(753) // minimal proxy call
+          .add(39) // calldata cost
+          .add(700) // smart wallet call
+          .add(20300) // set owner
+          .add(2100) // IDK
+          .add(20300) // domainSeparator
+          .add(1500) // emit Deployed
+          .toString()
+      );
+      // console.log(receipt1.gasUsed.toString())
+      console.log(receipt2.gasUsed.toString());
+
+      /*   const iface = SmartWallet__factory.createInterface();
+
+      console.log('--------');
+      console.log(iface.parseLog(receipt2.logs[0])); */
+    });
+  });
+
+  describe.only('serverRelayCall', function () {
+    function createRequest(
+      request: Partial<IForwarder.ForwardRequestStruct>,
+      relayData: Partial<RelayData>
+    ): RelayRequest {
+      const baseRequest: RelayRequest = {
+        request: {
+          relayHub: ZERO_ADDRESS,
+          from: ZERO_ADDRESS,
+          to: ZERO_ADDRESS,
+          tokenContract: ZERO_ADDRESS,
+          value: '0',
+          nonce: '0',
+          tokenAmount: '0',
+          tokenGas: '0',
+          data: '0x',
+          validUntilTime: '0',
+          gas: '0',
+        },
+        relayData: {
+          gasPrice: '1',
+          feesReceiver: ZERO_ADDRESS,
+          callForwarder: ZERO_ADDRESS,
+          callVerifier: ZERO_ADDRESS,
+        },
+      };
+
+      return {
+        request: {
+          ...baseRequest.request,
+          ...request,
+        },
+        relayData: {
+          ...baseRequest.relayData,
+          ...relayData,
+        },
+      };
+    }
+
+    let smartWallet: SmartWallet;
+
+    beforeEach(async function () {
+      const dataTypesToSign = ['address', 'address', 'address', 'uint256'];
+      const valuesToSign = [
+        smartWalletFactory.address,
+        relayWorker.address,
+        ZERO_ADDRESS,
+        0,
+      ];
+      const toSign = ethers.utils.solidityKeccak256(
+        dataTypesToSign,
+        valuesToSign
+      );
+
+      const privateKey = Buffer.from(
+        relayWorker.privateKey.substring(2, 66),
+        'hex'
+      );
+      const signature = createValidPersonalSignSignature(privateKey, toSign);
+
+      await smartWalletFactory.createUserSmartWallet(
+        relayWorker.address,
+        ZERO_ADDRESS,
+        '0',
+        signature
+      );
+
+      const smartWalletAddress = await smartWalletFactory.getSmartWalletAddress(
+        relayWorker.address,
+        ZERO_ADDRESS,
+        0
+      );
+
+      smartWallet = await ethers.getContractAt(
+        'SmartWallet',
+        smartWalletAddress
+      );
+    });
+
+    it('', async function () {
+      const relayRequest = createRequest(
+        {
+          from: relayWorker.address,
+          relayHub: relayHub.address,
+          gas: 500,
+        },
+        {
+          callForwarder: smartWallet.address,
+        }
+      );
+
+      const typedRequestData = new TypedRequestData(
+        environment,
+        smartWallet.address,
+        relayRequest
+      );
+
+      const privateKey = Buffer.from(
+        relayWorker.privateKey.substring(2, 66),
+        'hex'
+      );
+
+      const signature = getLocalEip712DeploySignature(
+        typedRequestData,
+        privateKey
+      );
+
+      const estimation = await relayHub
+        .connect(relayWorker)
+        .estimateGas.serverRelayCall(relayRequest, signature, { gasPrice: 1 });
+      const tx2 = await relayHub
+        .connect(relayWorker)
+        .relayCall(relayRequest, signature, { gasPrice: 1 });
+
+      const receipt2 = await tx2.wait();
+
+      console.log('-----------');
+      console.log(
+        estimation
+          .add(4000) // initial buffer
+          .add(20300) //nonce increase
+          .toString()
+      );
+      console.log(receipt2.gasUsed.toString());
+
+      /*  const iface = SmartWallet__factory.createInterface();
+
+      console.log('--------');
+      console.log(iface.parseLog(receipt2.logs[0]));
+      console.log(iface.parseLog(receipt2.logs[1]));
+      console.log(iface.parseLog(receipt2.logs[2]));
+      console.log('--------'); */
+      //iface.parseLog(receipt2.logs[3]);
     });
   });
 });

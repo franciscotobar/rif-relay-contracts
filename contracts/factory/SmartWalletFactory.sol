@@ -61,23 +61,42 @@ contract SmartWalletFactory is
         );
     }
 
+    function serverUserSmartWalletCreation(
+        IForwarder.DeployRequest memory req,
+        bytes32 suffixData,
+        address feesReceiver,
+        bytes calldata sig
+    ) external view override returns (bool, bool) {
+        super._validateRequest(req, suffixData, sig);
+
+        getCreationBytecode();
+
+        keccak256(
+            abi.encodePacked(req.from, req.recoverer, req.index) // salt
+        );
+
+        abi.encodeWithSelector(
+            hex"a6b63eb8",
+            req.from,
+            req.tokenContract,
+            feesReceiver,
+            req.tokenAmount,
+            req.tokenGas
+        );
+
+        return (false, false);
+    }
+
     function relayedUserSmartWalletCreation(
         IForwarder.DeployRequest memory req,
         bytes32 suffixData,
         address feesReceiver,
         bytes calldata sig
-    ) external virtual override {
-        require(msg.sender == req.relayHub, "Invalid caller");
-        _verifySig(req, suffixData, sig);
-        // solhint-disable-next-line not-rely-on-time
-        require(
-            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
-            "SW: request expired"
-        );
+    ) external override {
+        super._validateRequest(req, suffixData, sig);
         _nonces[req.from]++;
 
         //a6b63eb8  =>  initialize(address owner,address tokenAddr,address tokenRecipient,uint256 tokenAmount,uint256 tokenGas)
-        /* solhint-disable avoid-tx-origin */
         _deploy(
             getCreationBytecode(),
             keccak256(
@@ -107,10 +126,8 @@ contract SmartWalletFactory is
                 revert(0, 0)
             }
         }
-
         //Since the init code determines the address of the smart wallet, any initialization
         //required is done via the runtime code, to avoid the parameters impacting on the resulting address
-
         /* solhint-disable-next-line avoid-low-level-calls */
         (bool success, ) = addr.call(initdata);
 

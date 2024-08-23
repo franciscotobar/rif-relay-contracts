@@ -212,4 +212,19 @@ abstract contract BaseSmartWalletFactory is ISmartWalletFactory {
             "Signature mismatch"
         );
     }
+
+    function _validateRequest(
+        IForwarder.DeployRequest memory req,
+        bytes32 suffixData,
+        bytes calldata sig
+    ) internal view {
+        (sig);
+        require(msg.sender == req.relayHub, "Invalid caller");
+        _verifySig(req, suffixData, sig);
+        // solhint-disable-next-line not-rely-on-time
+        require(
+            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
+            "SW: request expired"
+        );
+    }
 }

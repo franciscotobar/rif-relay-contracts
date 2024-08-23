@@ -143,7 +143,7 @@ abstract contract BaseSmartWallet is IForwarder {
     function _verifySig(
         bytes32 suffixData,
         ForwardRequest memory req,
-        bytes memory sig
+        bytes calldata sig
     ) internal view {
         //Verify Owner
         require(
@@ -166,6 +166,22 @@ abstract contract BaseSmartWallet is IForwarder {
                 req.from
             ),
             "Signature mismatch"
+        );
+    }
+
+    function _validateRequest(
+        bytes32 suffixData,
+        ForwardRequest memory req,
+        bytes calldata sig
+    ) internal view {
+        (sig);
+        require(msg.sender == req.relayHub, "Invalid caller");
+
+        _verifySig(suffixData, req, sig);
+        // solhint-disable-next-line not-rely-on-time
+        require(
+            req.validUntilTime == 0 || req.validUntilTime > block.timestamp,
+            "SW: request expired"
         );
     }
 
@@ -201,6 +217,17 @@ abstract contract BaseSmartWallet is IForwarder {
         } else {
             return true;
         }
+    }
+
+    function serverExecute(
+        bytes32 suffixData,
+        ForwardRequest memory req,
+        address /*  feesReceiver */,
+        bytes calldata sig
+    ) external payable virtual override returns (bool, bool) {
+        _validateRequest(suffixData, req, sig);
+
+        return (false, false);
     }
 
     /* solhint-disable no-empty-blocks */

@@ -12,6 +12,7 @@ library ContractValidator {
      */
     function isContract(address addr) internal view returns (bool) {
         uint32 size;
+        /* solhint-disable-next-line no-inline-assembly */
         assembly {
             size := extcodesize(addr)
         }
@@ -21,6 +22,7 @@ library ContractValidator {
     function getCodeHash(
         address addr
     ) internal view returns (bytes32 codeHash) {
+        /* solhint-disable-next-line no-inline-assembly */
         assembly {
             codeHash := extcodehash(addr)
         }
